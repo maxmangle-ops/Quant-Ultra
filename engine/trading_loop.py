@@ -5,6 +5,12 @@ Trading Loop
 Version : 3.0
 Status  : Runtime Service
 =========================================================
+Maintains the runtime lifecycle and continuously monitors
+the Runtime-owned position state.
+
+Market execution remains event-driven by WebSocket candle
+close events.
+=========================================================
 """
 
 import threading
@@ -21,6 +27,7 @@ class TradingLoop:
     ):
 
         self.engine = integration_engine
+
         self.position_manager = position_manager
 
         self.interval = interval
@@ -42,28 +49,43 @@ class TradingLoop:
 
             try:
 
-                positions = self.position_manager.get_open_positions()
+                positions = (
+                    self.position_manager
+                    .get_open_positions()
+                )
 
                 if positions:
 
                     print(
-                        f"📍 Monitoring {len(positions)} Open Position(s)"
+                        f"📍 Monitoring "
+                        f"{len(positions)} "
+                        f"Open Position(s)"
                     )
 
+                # -------------------------------------------------
+                # Pipeline scheduling
                 #
-                # Scanner / Strategy execution
-                # will be Scheduler driven.
+                # The production pipeline is event-driven.
+                # WebSocketService invokes IntegrationEngine when
+                # a candle closes.
                 #
+                # Do not invoke engine.run() here as that would
+                # create a second independent pipeline scheduler.
+                # -------------------------------------------------
 
-            except Exception as e:
+            except Exception as exc:
 
                 print()
                 print("=" * 70)
                 print("❌ Trading Loop Error")
                 print("=" * 70)
-                print(e)
+                print(
+                    f"{type(exc).__name__}: {exc}"
+                )
 
-            time.sleep(self.interval)
+            time.sleep(
+                self.interval,
+            )
 
         print()
         print("🛑 Trading Loop Exited")
@@ -73,13 +95,17 @@ class TradingLoop:
     def start(self):
 
         if self.running:
+
             return
 
         self.running = True
 
         self.thread = threading.Thread(
+
             target=self._run,
+
             daemon=True,
+
             name="TradingLoop",
         )
 
@@ -93,14 +119,19 @@ class TradingLoop:
 
         if self.thread:
 
-            self.thread.join(timeout=5)
+            self.thread.join(
+                timeout=5,
+            )
+
+            self.thread = None
 
         print()
-
         print("🛑 Trading Loop Stopped")
 
 
-# ---------------------------------------------------------
+# =========================================================
+# Standalone Runtime Entry
+# =========================================================
 
 if __name__ == "__main__":
 
@@ -110,13 +141,16 @@ if __name__ == "__main__":
 
     runtime.initialize()
 
-    loop = runtime.get("trading_loop")
+    loop = runtime.get(
+        "trading_loop",
+    )
 
     loop.start()
 
     try:
 
         while True:
+
             time.sleep(1)
 
     except KeyboardInterrupt:
