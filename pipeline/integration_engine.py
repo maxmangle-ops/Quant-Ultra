@@ -3,151 +3,93 @@
 QUANT ULTRA
 Integration Engine
 =========================================================
+Central orchestration layer for the trading pipeline.
+All shared services are supplied by Runtime.
+=========================================================
 """
-
-from config.config_manager import ConfigManager
-from watchlist.watchlist_manager import WatchlistManager
-from scanner.multi_symbol_scanner import MultiSymbolScanner
-from market.market_intelligence import MarketIntelligence
-from guardian.news_guardian import NewsGuardian
-
-from cost.charges import CostEngine
-from margin.calculator import MarginEngine
-from decision.engine import DecisionEngine
-from orders.order_manager import OrderManager
-from dashboard.dashboard import Dashboard
-from reports.report_generator import ReportGenerator
-from execution.option_pipeline import OptionPipeline
-
-TEST_MODE = False
-
-# =========================================================
-# NEW ARCHITECTURE
-# =========================================================
 
 from core.execution_router import (
     ExecutionRouter,
     ExecutionType,
 )
 
-from execution.equity_adapter import EquityAdapter
-
-# =========================================================
-# TRADING BRAIN
-# =========================================================
-
-from intelligence.brain import TradingBrain
 from execution.execution_context import ExecutionContext
+
+
+TEST_MODE = False
 
 
 class IntegrationEngine:
 
     def __init__(
         self,
-        config=None,
-        watchlist=None,
-        market=None,
-        guardian=None,
-        cost=None,
-        margin=None,
-        brain=None,
-        decision=None,
-        orders=None,
-        dashboard=None,
-        report=None,
-        router=None,
-        equity_adapter=None,
-        option_pipeline=None,
+        config,
+        watchlist,
+        scanner,
+        market,
+        guardian,
+        cost,
+        margin,
+        brain,
+        decision,
+        orders,
+        dashboard,
+        report,
+        router,
+        equity_adapter,
+        option_pipeline,
     ):
-        """
-        Runtime Ready Constructor
 
-        During migration every dependency is optional.
+        self.config = config
 
-        Runtime will inject shared instances.
+        self.watchlist = watchlist
 
-        If a dependency is not provided,
-        a local instance is created so that
-        existing code continues to work.
-        """
+        self.scanner = scanner
 
-        # -------------------------------------------------
-        # Core
-        # -------------------------------------------------
+        self.market = market
 
-        self.config = config or ConfigManager()
+        self.guardian = guardian
 
-        self.watchlist = watchlist or WatchlistManager()
+        self.cost = cost
 
-        # -------------------------------------------------
-        # Market Intelligence
-        # -------------------------------------------------
+        self.margin = margin
 
-        self.market = market or MarketIntelligence()
+        self.brain = brain
 
-        self.guardian = guardian or NewsGuardian()
+        self.decision = decision
 
-        # -------------------------------------------------
-        # Risk / Cost
-        # -------------------------------------------------
+        self.orders = orders
 
-        self.cost = cost or CostEngine()
+        self.dashboard = dashboard
 
-        self.margin = margin or MarginEngine()
+        self.report = report
 
-        # -------------------------------------------------
-        # Trading Brain
-        # -------------------------------------------------
+        self.router = router
 
-        self.brain = brain or TradingBrain()
+        self.equity_adapter = equity_adapter
 
-        self.decision = decision or DecisionEngine()
-
-        # -------------------------------------------------
-        # Execution
-        # -------------------------------------------------
-
-        self.orders = orders or OrderManager()
-
-        self.router = router or ExecutionRouter()
-
-        self.equity_adapter = equity_adapter or EquityAdapter()
-
-        self.option_pipeline = option_pipeline or OptionPipeline()
-
-        # -------------------------------------------------
-        # Presentation
-        # -------------------------------------------------
-
-        self.dashboard = dashboard or Dashboard()
-
-        self.report = report or ReportGenerator()
+        self.option_pipeline = option_pipeline
 
     # -------------------------------------------------
 
     def run(self):
 
         print()
-
         print("=" * 80)
-
         print("🚀 QUANT ULTRA INTEGRATION ENGINE")
-
         print("=" * 80)
 
         # -------------------------------------------------
         # Scanner
         # -------------------------------------------------
 
-        symbols = self.watchlist.get_symbols()
-
-        scanner = MultiSymbolScanner(symbols)
-
-        analysis = scanner.best_trade()
+        analysis = self.scanner.best_trade()
 
         if analysis is None:
 
-            print("No opportunities found.")
+            print(
+                "No opportunities found."
+            )
 
             return
 
@@ -174,35 +116,41 @@ class IntegrationEngine:
             global_market=None,
 
             calendar=None,
-
         )
 
         market["reasons"] = (
 
             analysis.reasons
 
-            + guardian.get("reasons", [])
-
+            + guardian.get(
+                "reasons",
+                [],
+            )
         )
 
-        # Enrich the canonical analysis object before it reaches the Brain.
-        analysis.market_score = market["market_score"]
-        analysis.metadata["market_bias"] = market["market_bias"]
+        # Enrich the canonical analysis object before
+        # it reaches the Trading Brain.
+
+        analysis.market_score = (
+            market["market_score"]
+        )
+
+        analysis.metadata["market_bias"] = (
+            market["market_bias"]
+        )
+
+        # -------------------------------------------------
+        # Capital / Risk
+        # -------------------------------------------------
 
         capital = self.config.get(
-
             "capital",
-
             10000,
-
         )
 
         risk_percent = self.config.get(
-
             "risk_percent",
-
             1,
-
         )
 
         # =================================================
@@ -213,19 +161,19 @@ class IntegrationEngine:
 
             capital=capital,
 
-            technical_score=analysis.technical_score,
-
+            technical_score=(
+                analysis.technical_score
+            ),
         )
 
         print()
-
         print("=" * 60)
-
         print("⚙ EXECUTION MODE")
-
         print("=" * 60)
 
-        print(execution.value)
+        print(
+            execution.value
+        )
 
         print("=" * 60)
 
@@ -237,53 +185,88 @@ class IntegrationEngine:
 
         if execution == ExecutionType.EQUITY:
 
-            trade = self.equity_adapter.create_trade(
+            trade = (
+                self.equity_adapter.create_trade(
 
-                analysis,
+                    analysis,
 
-                capital,
+                    capital,
 
-                risk_percent,
-
+                    risk_percent,
+                )
             )
 
             selected_symbol = trade.symbol
 
         else:
 
-            trade, candidate = self.option_pipeline.execute(
+            trade, candidate = (
+                self.option_pipeline.execute(
 
-                analysis=analysis,
+                    analysis=analysis,
 
-                capital=capital,
+                    capital=capital,
 
-                risk_percent=risk_percent,
-
+                    risk_percent=risk_percent,
+                )
             )
 
-            selected_symbol = candidate.contract.trading_symbol
+            selected_symbol = (
+                candidate.contract.trading_symbol
+            )
 
-        trade.confidence = analysis.confidence
-        trade.technical_score = analysis.technical_score
-        trade.market_score = analysis.market_score
+        trade.confidence = (
+            analysis.confidence
+        )
+
+        trade.technical_score = (
+            analysis.technical_score
+        )
+
+        trade.market_score = (
+            analysis.market_score
+        )
 
         # -------------------------------------------------
-        # Copy Contract Metadata into TradePlan (Options only)
+        # Option Contract Metadata
         # -------------------------------------------------
 
         if candidate is not None:
 
-            trade.instrument_key = candidate.contract.instrument_key
-            trade.trading_symbol = candidate.contract.trading_symbol
-            trade.underlying = candidate.contract.underlying
-            trade.exchange = candidate.contract.exchange
-            trade.expiry = candidate.contract.expiry
-            trade.strike = candidate.contract.strike
-            trade.option_type = candidate.contract.option_type
-            trade.lot_size = candidate.contract.lot_size
+            trade.instrument_key = (
+                candidate.contract.instrument_key
+            )
+
+            trade.trading_symbol = (
+                candidate.contract.trading_symbol
+            )
+
+            trade.underlying = (
+                candidate.contract.underlying
+            )
+
+            trade.exchange = (
+                candidate.contract.exchange
+            )
+
+            trade.expiry = (
+                candidate.contract.expiry
+            )
+
+            trade.strike = (
+                candidate.contract.strike
+            )
+
+            trade.option_type = (
+                candidate.contract.option_type
+            )
+
+            trade.lot_size = (
+                candidate.contract.lot_size
+            )
 
         # -------------------------------------------------
-        # COST ENGINE
+        # Cost Engine
         # -------------------------------------------------
 
         cost = self.cost.calculate(
@@ -293,36 +276,39 @@ class IntegrationEngine:
             trade.target,
 
             trade.quantity,
-
         )
 
-        trade.apply_cost_report(cost)
+        trade.apply_cost_report(
+            cost,
+        )
 
         print()
-
         print("=" * 60)
-
         print("💸 COST REPORT")
-
         print("=" * 60)
 
-        for k, v in cost.items():
+        for key, value in cost.items():
 
-            print(f"{k:18}: {v}")
+            print(
+                f"{key:18}: {value}"
+            )
 
         print("=" * 60)
 
         # -------------------------------------------------
-        # MARGIN ENGINE
+        # Margin Engine
         # -------------------------------------------------
 
         margin = self.margin.calculate(
 
             available_margin=capital,
 
-            required_margin=trade.capital_used * 0.20,
+            required_margin=(
+                trade.capital_used * 0.20
+            ),
+        )
 
-        )        # -------------------------------------------------
+        # -------------------------------------------------
         # Execution Context
         # -------------------------------------------------
 
@@ -345,19 +331,15 @@ class IntegrationEngine:
             spread_ok=True,
 
             duplicate_position=False,
-
         )
 
-        # -------------------------------------------------
+        # =================================================
         # Trading Brain
-        # -------------------------------------------------
+        # =================================================
 
         print()
-
         print("=" * 60)
-
         print("🧠 TRADING BRAIN")
-
         print("=" * 60)
 
         brain_result = self.brain.evaluate(
@@ -369,7 +351,6 @@ class IntegrationEngine:
             cost,
 
             context,
-
         )
 
         fusion = None
@@ -377,43 +358,34 @@ class IntegrationEngine:
         report = None
 
         if brain_result.get(
-
             "success",
-
             False,
-
         ):
 
             fusion = brain_result.get(
-
                 "fusion",
-
             )
 
             report = brain_result.get(
-
                 "report",
-
             )
 
-            print("✅ Trading Brain Completed")
+            print(
+                "✅ Trading Brain Completed"
+            )
 
         else:
 
             print()
-
+            print("=" * 60)
             print("❌ Trading Brain Failed")
+            print("=" * 60)
 
             print(
-
                 brain_result.get(
-
                     "error",
-
                     "Unknown Error",
-
                 )
-
             )
 
             return
@@ -431,9 +403,7 @@ class IntegrationEngine:
             fusion,
 
             margin,
-
         )
-
 
         # -------------------------------------------------
         # Dashboard
@@ -450,7 +420,6 @@ class IntegrationEngine:
                 "margin": capital,
 
                 "buying_power": capital * 5,
-
             },
 
             analysis=analysis,
@@ -466,13 +435,12 @@ class IntegrationEngine:
                 "capital_used": 0,
 
                 "risk": 0,
-
             },
+        )
 
-        )        # -------------------------------------------------
+        # =================================================
         # Order Execution
-        # -------------------------------------------------
-
+        # =================================================
 
         approved = decision["Approved"]
 
@@ -490,7 +458,6 @@ class IntegrationEngine:
         if approved:
 
             print()
-
             print("=" * 60)
             print("🚀 ORDER EXECUTION")
             print("=" * 60)
@@ -499,10 +466,27 @@ class IntegrationEngine:
             print("=" * 60)
             print("DEBUG")
             print("=" * 60)
-            print("trade.side              :", trade.side)
-            print("trade.symbol            :", trade.symbol)
-            print("decision recommendation :", decision["Recommendation"])
-            print("decision approved       :", decision["Approved"])
+
+            print(
+                "trade.side              :",
+                trade.side,
+            )
+
+            print(
+                "trade.symbol            :",
+                trade.symbol,
+            )
+
+            print(
+                "decision recommendation :",
+                decision["Recommendation"],
+            )
+
+            print(
+                "decision approved       :",
+                decision["Approved"],
+            )
+
             print("=" * 60)
 
             self.orders.place_order(
@@ -520,18 +504,25 @@ class IntegrationEngine:
                 quantity=trade.quantity,
 
                 mode=self.config.profile(),
-
             )
 
         else:
 
             print()
-
             print("=" * 60)
             print("🚫 TRADE BLOCKED")
             print("=" * 60)
-            print(f"Recommendation : {decision['Recommendation']}")
-            print(f"Approved       : {decision['Approved']}")
+
+            print(
+                f"Recommendation : "
+                f"{decision['Recommendation']}"
+            )
+
+            print(
+                f"Approved       : "
+                f"{decision['Approved']}"
+            )
+
             print("=" * 60)
 
         # -------------------------------------------------
@@ -539,16 +530,23 @@ class IntegrationEngine:
         # -------------------------------------------------
 
         print()
-
         print("=" * 80)
-
         print("✅ PIPELINE COMPLETED")
-
         print("=" * 80)
 
 
-# ---------------------------------------------------------
+# =========================================================
+# Standalone Runtime Entry
+# =========================================================
 
 if __name__ == "__main__":
 
-    IntegrationEngine().run()
+    from runtime.runtime import Runtime
+
+    runtime = Runtime()
+
+    runtime.initialize()
+
+    runtime.get(
+        "integration_engine",
+    ).run()
