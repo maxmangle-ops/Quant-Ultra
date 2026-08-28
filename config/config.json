@@ -1,0 +1,35 @@
+{
+    "profile": "paper",
+
+    "capital": 10000,
+
+    "risk_percent": 1,
+
+    "paper_trading": true,
+
+    "live_trading": false,
+
+    "scanner_enabled": true,
+
+    "telegram_enabled": false,
+
+    "market_intelligence": true,
+
+    "daily_loss_percent": 3,
+
+    "daily_profit_percent": 5,
+
+    "max_open_positions": 3,
+
+    "max_portfolio_risk": 2,
+
+    "enable_vix": true,
+
+    "enable_fii_dii": true,
+
+    "enable_gift_nifty": true,
+
+    "enable_global_market": true,
+
+    "enable_calendar": true
+}
